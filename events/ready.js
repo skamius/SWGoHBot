@@ -16,6 +16,9 @@ module.exports = async (Bot, client) => {
     if (client.shard) {
         readyString = `${client.user.username} is ready to serve ${client.users.cache.size} users in ${client.guilds.cache.size} servers. Shard #${client.shard.id}`;
         if (client.shard.id === 0) {
+            // Load all the events/ announcements
+            Bot.loadAllEvents();
+
             // Reload the patrons' goh data, and check for arena rank changes every minute
             if (Bot.config.premium) {
                 setInterval(async () => {
@@ -56,6 +59,4 @@ module.exports = async (Bot, client) => {
         Bot.swgohPlayerCount = await dbo.collection("playerStats").find({}).count();
         Bot.swgohGuildCount  = await dbo.collection("guilds").find({}).count();
     }, 5 * 60 * 1000);
-
-    Bot.loadAllEvents();
 };
