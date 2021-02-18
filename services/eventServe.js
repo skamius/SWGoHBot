@@ -15,6 +15,8 @@ const database = new Sequelize(
     }
 );
 
+const socketReg = [];
+
 async function init() {
     await database.authenticate()
         .then(async () => {
@@ -26,8 +28,38 @@ async function init() {
         })
         .error((e) => console.log(e));
 
+    // Loop every min to check events, then calculate the shard it needs to go to and send it
+    // setInterval("checkEvents", 1000 * 60);
+    function getShardnum(guildID, shardCount) {
+        const shard = Number(BigInt(guildID) >> 22n) % shardCount;
+        if (shard < 0) throw new Error("SHARDING_SHARD_MISCALCULATION", shard, guildID, shardCount);
+        return shard;
+    }
+
     io.on("connection", async socket => {
         console.log("Socket connected");
+
+        socket.on("register", (shardID, callback) => {
+            const exists = socket.find(s => s.shardID === shardID);
+            if (exists) {
+                callback({
+                    success: false,
+                    error: "socketID is already registered"
+                });
+            } else {
+                socketReg.push({shardID: shardID, socketID: socket.id});
+                console.log(`Registering [${shardID}] ${socket.id} to socketReg`);
+                callback({success: true});
+            }
+        });
+
+        socket.on("disconnect", () => {
+            const exists = socket.find(s => s.socketID === socket.id);
+            if (exists) {
+                console.log(`Removing ${socket.id} from socketReg`);
+                socketReg.splice(socketReg.indexOf(s => s.socketID === socket.id), 1);
+            }
+        });
 
         socket.on("checkEvents", async (callback) => {
             // Check all the events, and send back any that should be sent
@@ -73,11 +105,6 @@ async function init() {
                         eventsOut.push(ev);
                     }
                 }
-            }
-
-            // callback(pastEvents, futureCoutdownEvents);
-            if (eventsOut.length) {
-                // console.log(`Sending ${eventsOut.length} event(s) to the client`);
             }
             return callback(eventsOut);
         });
